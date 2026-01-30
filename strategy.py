@@ -31,7 +31,7 @@ class SpreadStrategy(Strategy):
             elif sell_spread <= self.spread_thresh:
                 print(f"[{timestamp}] STRATEGY: Sell signal for {symbol}")
                 print("bid_price:", bid_price, "ask_price", ask_price, "last_price:", last_price)
-                await self.event_bus.publish(SignalEvent(symbol, timestamp, 'SELL', meta={"strategy_id": self.strategy_id}))
+                # await self.event_bus.publish(SignalEvent(symbol, timestamp, 'SELL', meta={"strategy_id": self.strategy_id}))
 
 class RTStrategy(Strategy):
     def __init__(self, event_bus, samples=10, scale_ratio=1.0, max_depth=1, strategy_id="macdfs"):

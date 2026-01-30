@@ -75,15 +75,15 @@ class TradeEngine:
                 self.sizer.prev_signal = payload["orderLegCollection"][0]["instruction"]
             else:
                 order_url = f"https://api.schwabapi.com/trader/v1/accounts/{self.portfolio.account_number}/orders"
-                # response = requests.post(order_url, headers=headers, json=payload, timeout=2)
-                # if response.status_code == 201:
-                #     # 获取 Location header
-                #     location = response.headers.get("Location")
-                #     print("Order created, location:", location)
-                #     order_id = location.split('/')[-1]
-                #     return order_id
+                response = requests.post(order_url, headers=headers, json=payload, timeout=2)
+                if response.status_code == 201:
+                     # 获取 Location header
+                     location = response.headers.get("Location")
+                     print("Order created, location:", location)
+                     order_id = location.split('/')[-1]
+                     return order_id
             
-                # response.raise_for_status()
+                response.raise_for_status()
 
         except requests.exceptions.Timeout:
             print("错误：Order请求超时，超过2秒未响应")
@@ -112,7 +112,7 @@ class TradeEngine:
         fill_price = event.fill_price
         commission = event.commission
         meta = event.meta
-
+        print(f"✅  {timestamp} Order成交: {signal} {symbol}${fill_price}@{quantity}")
         self.sizer.prev_signal = signal
 
 
@@ -139,7 +139,7 @@ async def main():
 
     # init sizer
     sizer = SpreadSizer()
-    sandbox = True
+    sandbox = False
     trade_engine = TradeEngine(event_bus, portfolio, sizer, sandbox)
     event_bus.subscribe('TokenEvent', trade_engine.on_token_event)
     event_bus.subscribe('SignalEvent', trade_engine.on_signal_event)

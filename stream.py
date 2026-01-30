@@ -37,7 +37,7 @@ class DataStream:
     async def on_token_event(self, event: TokenEvent):
         self.access_token = event.access_token
         # ws连上后不会因为token过期而主动断开 
-        if self.ws is None or not self.ws.open:
+        if self.ws is None:
             self.streamer_config = self.current_streamer_config
             # 异步触发重连，不阻塞事件循环
             task = asyncio.create_task(self.connect_streamer())
@@ -77,7 +77,7 @@ class DataStream:
     async def connect_streamer(self):
         async with self._ws_lock:
             # 关闭旧连接
-            if self.ws and self.ws.open:
+            if self.ws:
                 await self.ws.close()
 
             # 连接新 ws
@@ -186,7 +186,8 @@ class DataStream:
                             await self.event_bus.publish(MarketEvent(data=data))
 
                     elif service == "ACCT_ACTIVITY":
-                        print(entry)
+                        symbol, timestamp, fill_quantity, signal, fill_price, commission, order_id = self.parse_account_activity_entry(entry)
+                        await self.event_bus.publish(FillEvent(symbol, timestamp, fill_quantity, signal, fill_price, commission,meta={"order_id": order_id}))
 
         except asyncio.CancelledError:
             print("🔹 recv_streamer task cancelled")
@@ -220,7 +221,6 @@ class DataStream:
                 order_post_info = order_leg_info.get("OrderInfoForTransactionPosting", {})
                 symbol = order_post_info.get("Symbol")
                 signal = order_post_info.get("BuySellCode")
-                order_type = order_post_info.get("OrderTypeCode")
 
                 exec_info = order_leg_info.get("ExecutionInfo", {})
                 # 成交数量（换算：lo / 10^signScale × 10^6）
@@ -232,8 +232,7 @@ class DataStream:
                 # 实际手续费（无lo值则为0）
                 exec_commission = exec_info.get("ActualChargedCommissionAmount", {})
                 commission = int(exec_commission.get("lo", 0)) / (10 ** int(exec_commission.get("signScale", 0))) * 10**6
-                                
-                await self.event_bus.publish(FillEvent(symbol, timestamp, fill_quantity, signal, fill_price, commission, meta={"order_id": order_id, "order_type": order_type}))
+                return symbol, timestamp, fill_quantity, signal, fill_price, commission, order_id                
             
 
 
