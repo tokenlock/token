@@ -180,14 +180,17 @@ class DataStream:
                     service = entry.get("service")
                     
                     if service == "LEVELONE_EQUITIES":
-                        data = self.parse_levelone_equities_entry(entry)
-                        if data:
+                        levelone_equities_data = self.parse_levelone_equities_entry(entry)
+                        if levelone_equities_data:
                             # print(data)
-                            await self.event_bus.publish(MarketEvent(data=data))
+                            await self.event_bus.publish(MarketEvent(data=levelone_equities_data))
 
                     elif service == "ACCT_ACTIVITY":
-                        symbol, timestamp, fill_quantity, signal, fill_price, commission, order_id = self.parse_account_activity_entry(entry)
-                        await self.event_bus.publish(FillEvent(symbol, timestamp, fill_quantity, signal, fill_price, commission,meta={"order_id": order_id}))
+                        print(entry)
+                        # 返回是一个是list 虽然大量时间list里只有一个字典
+                        fill_records = self.parse_account_activity_entry(entry)
+                        for fill_record in fill_records:
+                            await self.event_bus.publish(FillEvent(fill_record["symbol"], fill_record["timestamp"], fill_record["fill_quantity"], fill_record["signal"], fill_record["fill_price"], fill_record["commission"], meta={"order_id": fill_record["order_id"]}))
 
         except asyncio.CancelledError:
             print("🔹 recv_streamer task cancelled")
@@ -209,7 +212,8 @@ class DataStream:
         }
         await self.ws.send(json.dumps(payload))
 
-    async def parse_account_activity_entry(self, entry):
+    def parse_account_activity_entry(self, entry):
+        parsed = []
         timestamp = entry.get("timestamp")
         for content in entry.get("content", []):
             order_status = content.get("2")
@@ -232,12 +236,21 @@ class DataStream:
                 # 实际手续费（无lo值则为0）
                 exec_commission = exec_info.get("ActualChargedCommissionAmount", {})
                 commission = int(exec_commission.get("lo", 0)) / (10 ** int(exec_commission.get("signScale", 0))) * 10**6
-                return symbol, timestamp, fill_quantity, signal, fill_price, commission, order_id                
+                parsed.append({
+                    "symbol": symbol,
+                    "timestamp": timestamp,
+                    "fill_quantity": fill_quantity,
+                    "signal": signal,
+                    "fill_price": fill_price,
+                    "commission": commission,
+                    "order_id": order_id
+                })
+        return parsed
             
 
 
 async def main():
-    access_token = "I0.b2F1dGgyLmJkYy5zY2h3YWIuY29t.zXqDvVQrYDa69ZUlMApCvkI5uR7dNEJ8KGcQVBdaiK4@"
+    access_token = "I0.b2F1dGgyLmNkYy5zY2h3YWIuY29t.5ccf0Jb0G5Vrz5wEJaQ9NkGLPoq-OCXDuLzDKhIhHR0@"
     event_bus = EventBus()
     token_event = TokenEvent(access_token=access_token)
     data_stream = DataStream(event_bus)
