@@ -16,7 +16,7 @@ class Portfolio:
     async def on_token_event(self, event: TokenEvent):
         self.access_token = event.access_token
         # account_number只获取一次
-        if not self.account_number:
+        if self.account_number is None:
             self.account_number = self.get_account_number()
 
     def get_account_detail(self):
