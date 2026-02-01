@@ -250,7 +250,10 @@ class DataStream:
 
 
 async def main():
-    access_token = "I0.b2F1dGgyLmNkYy5zY2h3YWIuY29t.5ccf0Jb0G5Vrz5wEJaQ9NkGLPoq-OCXDuLzDKhIhHR0@"
+    url = "http://127.0.0.1:8080"
+    response = requests.get(url, timeout=5)
+    data = response.json()
+    access_token = data["access_token"]
     event_bus = EventBus()
     token_event = TokenEvent(access_token=access_token)
     data_stream = DataStream(event_bus)

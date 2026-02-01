@@ -104,8 +104,9 @@ class Portfolio:
         return balance, positions
 
     def on_fill_event(self, event):
-        # 维护一个离线的balance加快查询速度
-        pass
+        # 现在思路是启动时查询一次, fill后自动对账一次
+        # 减少查询频率 同时保证状态最新
+        self.get_account_detail()
 
 
 if __name__ == "__main__":
@@ -113,7 +114,11 @@ if __name__ == "__main__":
     schwab_account_base_url = "https://api.schwabapi.com/trader/v1/accounts"
     portfolio = Portfolio(schwab_account_base_url)
     # event_bus.subscribe("TokenEvent", portfolio.on_token_event)
-    portfolio.access_token = "I0.b2F1dGgyLmJkYy5zY2h3YWIuY29t.5jVykVPV5PONDsWreSJOpbZDcw_4fAVB6RmNaaWCR-E@"
+    url = "http://127.0.0.1:8080"
+    response = requests.get(url, timeout=5)
+    data = response.json()
+    access_token = data["access_token"]
+    portfolio.access_token = access_token
     # print(portfolio.get_account_number())
     portfolio.account_number = "76202B2D1AA8092A5D32F69F527109D8C873E5210A3A5E81B3D239C7A32EFFC7"
     print(portfolio.get_balance_position())

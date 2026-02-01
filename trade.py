@@ -136,6 +136,8 @@ async def main():
     portfolio = Portfolio()
     # portfolio订阅token
     event_bus.subscribe('TokenEvent', portfolio.on_token_event)
+    # portfolio订阅fill event 查询最新balance position
+    event_bus.subscribe('FillEvent', portfolio.on_fill_event)
 
     # init sizer
     sizer = SpreadSizer()
