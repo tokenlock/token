@@ -6,7 +6,7 @@ from stream import DataStream
 from strategy import SpreadStrategy
 from sizers import SpreadSizer
 from portfolio import Portfolio
-from events import EventBus, TokenEvent, SignalEvent, OrderEvent, FillEvent
+from events import EventBus, TokenEvent, SignalEvent, OrderEvent, FillEvent, MarketEvent
 
 class TradeEngine:
     def __init__(self, event_bus, portfolio, sizer, sandbox=True):
@@ -14,10 +14,24 @@ class TradeEngine:
         self.portfolio = portfolio
         self.sizer = sizer
         self.sandbox = sandbox
+        self.ticks = {}
+
     
     # 获取到最新access_token, 事件驱动可以发布到多个订阅共同接收
     async def on_token_event(self, event: TokenEvent):
         self.access_token = event.access_token
+
+    # 获取到实时最新的tick 避免在事件中传递过时的tick
+    async def on_market_event(self, event: MarketEvent):
+            for bar in event.data:
+                symbol = bar["symbol"]
+                # 存入缓存，供下单函数随时调用
+                self.ticks[symbol] = {
+                    "bid_price": bar["bid_price"],
+                    "ask_price": bar["ask_price"],
+                    "last_price": bar["last_price"],
+                    "timestamp": bar["timestamp"]
+                }
 
     async def on_signal_event(self, event: SignalEvent):
         symbol = event.symbol
@@ -25,8 +39,7 @@ class TradeEngine:
         signal = event.signal
         strength = event.strength # 信号强度
         quantity = self.sizer.calculate_quantity(signal)
-        if quantity > 0:
-            await self.event_bus.publish(OrderEvent(symbol, "MARKET", quantity, signal))
+        await self.event_bus.publish(OrderEvent(symbol, "LIMIT", quantity, signal))
             
     async def on_order_event(self, event: OrderEvent) -> None:
         """
@@ -39,12 +52,35 @@ class TradeEngine:
         order_type = event.order_type
         quantity = event.quantity
         signal = event.signal
+
+        if signal == "BUY":
+            price = self.ticks[symbol]["bid_price"]
+        elif signal == "SELL":
+            price = self.ticks[symbol]["ask_price"]
+
+        # simple risk module
+        if quantity == 0:
+            return 
+        
+        pos = self.portfolio.account_positions.get(symbol, None)
+        if signal == "SELL":
+            if pos is None or quantity > pos.get("netQty"):
+                print("SufficientPositionRule", "Insufficient position to sell")
+                return
+        elif signal == "BUY":
+            required_cash = price * quantity
+            available_cash = self.portfolio.account_balance
+            if required_cash > available_cash:
+                print("CashBasedBuyRule", "Insufficient funds to buy any quantity")
+                return
+
         # 构造订单请求的payload（字典格式）
         payload = {
             "orderType": order_type,
             "session": "NORMAL",
             "duration": "DAY",
             "orderStrategyType": "SINGLE",
+            "price": price,
             "orderLegCollection": [
                 {
                     "instruction": signal,
@@ -141,9 +177,10 @@ async def main():
 
     # init sizer
     sizer = SpreadSizer()
-    sandbox = False
+    sandbox = True
     trade_engine = TradeEngine(event_bus, portfolio, sizer, sandbox)
     event_bus.subscribe('TokenEvent', trade_engine.on_token_event)
+    event_bus.subscribe('MarketEvent', trade_engine.on_market_event)
     event_bus.subscribe('SignalEvent', trade_engine.on_signal_event)
     event_bus.subscribe('OrderEvent', trade_engine.on_order_event)
     event_bus.subscribe('FillEvent', trade_engine.on_fill_event)

@@ -1,6 +1,6 @@
 import os
 import requests
-from events import EventBus, TokenEvent
+from events import EventBus, TokenEvent, FillEvent
 
 class Portfolio:
     def __init__(self, schwab_account_base_url="https://api.schwabapi.com/trader/v1/accounts"):
@@ -16,12 +16,13 @@ class Portfolio:
     async def on_token_event(self, event: TokenEvent):
         self.access_token = event.access_token
         # account_number只获取一次
+        # 启动时主动获取一次number balance position
+        # 其余只有在fill event时才同步仓位
         if self.account_number is None:
             self.account_number = self.get_account_number()
-
-    def get_account_detail(self):
-        self.account_balance, self.account_positions = self.get_balance_position()
-
+            self.account_balance, self.account_positions = self.get_balance_position()
+    
+        
     def request_schwab_account(self, schwab_account_url, params=None):
         headers = {
             "Authorization": f"Bearer {self.access_token}",  # Bearer+空格+token
@@ -103,11 +104,12 @@ class Portfolio:
 
         return balance, positions
 
-    def on_fill_event(self, event):
+    async def on_fill_event(self, event: FillEvent):
         # 现在思路是启动时查询一次, fill后自动对账一次
         # 减少查询频率 同时保证状态最新
-        self.get_account_detail()
-
+        timestamp = event.timestamp
+        self.account_balance, self.account_positions = self.get_balance_position()
+        print("✅ timestamp Update balance and positions", )
 
 if __name__ == "__main__":
     # event_bus = EventBus()
